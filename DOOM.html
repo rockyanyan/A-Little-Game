@@ -1,0 +1,837 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DOOM风格小游戏</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+        }
+        
+        #gameCanvas {
+            display: block;
+            width: 100%;
+            height: 100vh;
+            cursor: none;
+        }
+        
+        #hud {
+            position: absolute;
+            bottom: 10px;
+            left: 10px;
+            color: white;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+        }
+        
+        #ammo {
+            position: absolute;
+            bottom: 10px;
+            right: 10px;
+            color: white;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+        }
+        
+        #health {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            color: white;
+            font-size: 18px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.7);
+        }
+        
+        #startScreen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+        }
+        
+        #startScreen h1 {
+            font-size: 48px;
+            color: #ff0000;
+            margin-bottom: 30px;
+            text-shadow: 0 0 10px #ff0000;
+        }
+        
+        #startButton {
+            padding: 15px 30px;
+            font-size: 24px;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        #startButton:hover {
+            background-color: #cc0000;
+            transform: scale(1.05);
+        }
+        
+        #controls {
+            margin-top: 30px;
+            text-align: center;
+        }
+        
+        #gameOver {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            color: white;
+            z-index: 10;
+        }
+        
+        #gameOver h1 {
+            font-size: 48px;
+            color: #ff0000;
+            margin-bottom: 30px;
+        }
+        
+        #restartButton {
+            padding: 15px 30px;
+            font-size: 24px;
+            background-color: #ff0000;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        
+        #restartButton:hover {
+            background-color: #cc0000;
+            transform: scale(1.05);
+        }
+        
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 20px;
+            height: 20px;
+            transform: translate(-50%, -50%);
+            pointer-events: none;
+            z-index: 5;
+        }
+        
+        #crosshair::before, #crosshair::after {
+            content: '';
+            position: absolute;
+            background-color: #ff0000;
+        }
+        
+        #crosshair::before {
+            width: 20px;
+            height: 2px;
+            top: 9px;
+            left: 0;
+        }
+        
+        #crosshair::after {
+            width: 2px;
+            height: 20px;
+            top: 0;
+            left: 9px;
+        }
+    </style>
+</head>
+<body>
+    <canvas id="gameCanvas"></canvas>
+    
+    <div id="hud">
+        击杀: <span id="kills">0</span>
+    </div>
+    
+    <div id="ammo">
+        弹药: <span id="ammoCount">30</span>/30
+    </div>
+    
+    <div id="health">
+        生命: <span id="healthCount">100</span>
+    </div>
+    
+    <div id="crosshair"></div>
+    
+    <div id="startScreen">
+        <h1>DOOM风格小游戏</h1>
+        <button id="startButton">开始游戏</button>
+        <div id="controls">
+            <p>WASD - 移动</p>
+            <p>鼠标 - 瞄准</p>
+            <p>鼠标左键 - 射击</p>
+            <p>R - 换弹</p>
+            <p>ESC - 暂停</p>
+        </div>
+    </div>
+    
+    <div id="gameOver">
+        <h1>游戏结束</h1>
+        <p>击杀数: <span id="finalKills">0</span></p>
+        <button id="restartButton">重新开始</button>
+    </div>
+    
+    <script>
+        // 游戏常量
+        const CELL_SIZE = 64;
+        const WALL_HEIGHT = 128;
+        const PLAYER_HEIGHT = 32;
+        const PLAYER_SPEED = 2;
+        const ROTATION_SPEED = 0.05;
+        const FOV = Math.PI / 3;
+        const HALF_FOV = FOV / 2;
+        const NUM_RAYS = 320;
+        const RAY_ANGLE_STEP = FOV / NUM_RAYS;
+        const RAY_LENGTH = 20;
+        
+        // 游戏变量
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const killsElement = document.getElementById('kills');
+        const ammoElement = document.getElementById('ammoCount');
+        const healthElement = document.getElementById('healthCount');
+        const finalKillsElement = document.getElementById('finalKills');
+        const startScreen = document.getElementById('startScreen');
+        const gameOverScreen = document.getElementById('gameOver');
+        const startButton = document.getElementById('startButton');
+        const restartButton = document.getElementById('restartButton');
+        
+        let gameRunning = false;
+        let isPaused = false;
+        let kills = 0;
+        let ammo = 30;
+        let maxAmmo = 30;
+        let health = 100;
+        let lastShotTime = 0;
+        let reloading = false;
+        let reloadStartTime = 0;
+        
+        // 调整画布大小
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+        }
+        
+        // 初始化游戏
+        function initGame() {
+            resizeCanvas();
+            
+            // 玩家初始位置和方向
+            player = {
+                x: CELL_SIZE * 1.5,
+                y: CELL_SIZE * 1.5,
+                angle: 0,
+                moving: {
+                    forward: false,
+                    backward: false,
+                    left: false,
+                    right: false
+                }
+            };
+            
+            // 地图 (1=墙, 0=空地)
+            map = [
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1],
+                [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                [1, 0, 0, 1, 1, 1, 0, 0, 0, 1],
+                [1, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+                [1, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+                [1, 0, 0, 1, 0, 0, 0, 0, 0, 1],
+                [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                [1, 0, 0, 0, 0, 0, 0, 0, 0, 1],
+                [1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+            ];
+            
+            // 敌人
+            enemies = [
+                { x: CELL_SIZE * 5, y: CELL_SIZE * 5, health: 100, speed: 0.5, size: 20, color: '#ff0000' },
+                { x: CELL_SIZE * 7, y: CELL_SIZE * 2, health: 100, speed: 0.5, size: 20, color: '#ff0000' },
+                { x: CELL_SIZE * 3, y: CELL_SIZE * 7, health: 100, speed: 0.5, size: 20, color: '#ff0000' }
+            ];
+            
+            // 武器
+            weapon = {
+                damage: 25,
+                fireRate: 200, // 毫秒
+                reloadTime: 1000 // 毫秒
+            };
+            
+            // 重置游戏状态
+            kills = 0;
+            ammo = maxAmmo;
+            health = 100;
+            lastShotTime = 0;
+            reloading = false;
+            
+            updateHUD();
+        }
+        
+        // 更新HUD
+        function updateHUD() {
+            killsElement.textContent = kills;
+            ammoElement.textContent = ammo;
+            healthElement.textContent = health;
+        }
+        
+        // 射线投射
+        function castRay(angle) {
+            // 规范化角度
+            angle = normalizeAngle(angle);
+            
+            // 射线方向
+            const rayDirX = Math.cos(angle);
+            const rayDirY = Math.sin(angle);
+            
+            // 玩家位置
+            const playerX = player.x / CELL_SIZE;
+            const playerY = player.y / CELL_SIZE;
+            
+            // 地图坐标
+            let mapX = Math.floor(playerX);
+            let mapY = Math.floor(playerY);
+            
+            // 从当前位置到下一个x或y边的距离
+            let sideDistX, sideDistY;
+            
+            // 从x或y边到下一个x或y边的距离
+            const deltaDistX = Math.abs(1 / rayDirX);
+            const deltaDistY = Math.abs(1 / rayDirY);
+            
+            // 步进方向
+            let stepX, stepY;
+            
+            // 是否击中墙
+            let hit = false;
+            // 是否击中北/南或东/西墙
+            let side;
+            
+            // 计算步进方向和初始sideDist
+            if (rayDirX < 0) {
+                stepX = -1;
+                sideDistX = (playerX - mapX) * deltaDistX;
+            } else {
+                stepX = 1;
+                sideDistX = (mapX + 1.0 - playerX) * deltaDistX;
+            }
+            
+            if (rayDirY < 0) {
+                stepY = -1;
+                sideDistY = (playerY - mapY) * deltaDistY;
+            } else {
+                stepY = 1;
+                sideDistY = (mapY + 1.0 - playerY) * deltaDistY;
+            }
+            
+            // DDA算法
+            while (!hit) {
+                // 跳转到下一个地图方格
+                if (sideDistX < sideDistY) {
+                    sideDistX += deltaDistX;
+                    mapX += stepX;
+                    side = 0;
+                } else {
+                    sideDistY += deltaDistY;
+                    mapY += stepY;
+                    side = 1;
+                }
+                
+                // 检查是否击中墙
+                if (mapX < 0 || mapX >= map[0].length || mapY < 0 || mapY >= map.length) {
+                    hit = true;
+                } else if (map[mapY][mapX] > 0) {
+                    hit = true;
+                }
+            }
+            
+            // 计算击中的距离
+            let perpWallDist;
+            if (side === 0) {
+                perpWallDist = (mapX - playerX + (1 - stepX) / 2) / rayDirX;
+            } else {
+                perpWallDist = (mapY - playerY + (1 - stepY) / 2) / rayDirY;
+            }
+            
+            // 防止除以零
+            perpWallDist = Math.max(0.1, perpWallDist);
+            
+            return {
+                distance: perpWallDist * CELL_SIZE,
+                side: side,
+                mapX: mapX,
+                mapY: mapY
+            };
+        }
+        
+        // 规范化角度到0-2π范围
+        function normalizeAngle(angle) {
+            angle = angle % (Math.PI * 2);
+            if (angle < 0) {
+                angle += Math.PI * 2;
+            }
+            return angle;
+        }
+        
+        // 渲染3D视图
+        function render3DView() {
+            const width = canvas.width;
+            const height = canvas.height;
+            const halfHeight = height / 2;
+            
+            // 清空画布
+            ctx.fillStyle = '#000033'; // 天空颜色
+            ctx.fillRect(0, 0, width, halfHeight);
+            ctx.fillStyle = '#333300'; // 地面颜色
+            ctx.fillRect(0, halfHeight, width, halfHeight);
+            
+            // 投射射线
+            for (let i = 0; i < NUM_RAYS; i++) {
+                const rayAngle = player.angle - HALF_FOV + i * RAY_ANGLE_STEP;
+                const ray = castRay(rayAngle);
+                
+                // 修正鱼眼效果
+                const correctedDistance = ray.distance * Math.cos(rayAngle - player.angle);
+                
+                // 计算墙的高度
+                const wallHeight = Math.min((CELL_SIZE * height) / correctedDistance, height * 2);
+                
+                // 计算墙的顶部和底部位置
+                const wallTop = halfHeight - wallHeight / 2;
+                const wallBottom = halfHeight + wallHeight / 2;
+                
+                // 根据距离计算颜色
+                let wallColor;
+                if (ray.side === 0) {
+                    // 东西墙
+                    wallColor = ray.distance < CELL_SIZE * 3 ? '#990000' : 
+                                ray.distance < CELL_SIZE * 6 ? '#660000' : '#330000';
+                } else {
+                    // 南北墙
+                    wallColor = ray.distance < CELL_SIZE * 3 ? '#999900' : 
+                                ray.distance < CELL_SIZE * 6 ? '#666600' : '#333300';
+                }
+                
+                // 绘制墙
+                ctx.fillStyle = wallColor;
+                ctx.fillRect(i * (width / NUM_RAYS), wallTop, (width / NUM_RAYS) + 1, wallHeight);
+            }
+            
+            // 渲染敌人
+            renderEnemies();
+        }
+        
+        // 渲染敌人
+        function renderEnemies() {
+            const width = canvas.width;
+            const height = canvas.height;
+            const halfWidth = width / 2;
+            const halfHeight = height / 2;
+            
+            enemies.forEach(enemy => {
+                // 计算敌人相对于玩家的位置
+                const dx = enemy.x - player.x;
+                const dy = enemy.y - player.y;
+                
+                // 计算敌人到玩家的距离
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // 计算敌人相对于玩家视角的角度
+                let enemyAngle = Math.atan2(dy, dx) - player.angle;
+                enemyAngle = normalizeAngle(enemyAngle);
+                
+                // 检查敌人是否在视野内
+                if (enemyAngle > Math.PI) enemyAngle -= Math.PI * 2;
+                if (Math.abs(enemyAngle) > HALF_FOV) return;
+                
+                // 计算敌人在屏幕上的位置
+                const enemyScreenX = halfWidth + (enemyAngle / HALF_FOV) * halfWidth;
+                
+                // 计算敌人的大小
+                const enemyHeight = Math.min((CELL_SIZE * height) / distance, height * 0.8);
+                const enemyWidth = enemyHeight * 0.6;
+                
+                // 计算敌人的顶部和底部位置
+                const enemyTop = halfHeight - enemyHeight / 2;
+                
+                // 绘制敌人
+                ctx.fillStyle = enemy.color;
+                ctx.fillRect(
+                    enemyScreenX - enemyWidth / 2,
+                    enemyTop,
+                    enemyWidth,
+                    enemyHeight
+                );
+                
+                // 绘制敌人血条
+                if (enemy.health < 100) {
+                    const healthBarWidth = enemyWidth * 0.8;
+                    const healthBarHeight = 5;
+                    const healthPercentage = enemy.health / 100;
+                    
+                    ctx.fillStyle = '#ff0000';
+                    ctx.fillRect(
+                        enemyScreenX - healthBarWidth / 2,
+                        enemyTop - 10,
+                        healthBarWidth,
+                        healthBarHeight
+                    );
+                    
+                    ctx.fillStyle = '#00ff00';
+                    ctx.fillRect(
+                        enemyScreenX - healthBarWidth / 2,
+                        enemyTop - 10,
+                        healthBarWidth * healthPercentage,
+                        healthBarHeight
+                    );
+                }
+            });
+        }
+        
+        // 更新敌人
+        function updateEnemies() {
+            enemies.forEach(enemy => {
+                // 计算敌人到玩家的距离和方向
+                const dx = player.x - enemy.x;
+                const dy = player.y - enemy.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                
+                // 如果敌人死亡则跳过
+                if (enemy.health <= 0) return;
+                
+                // 如果敌人靠近玩家则攻击
+                if (distance < CELL_SIZE * 2) {
+                    // 简单攻击逻辑
+                    if (Math.random() < 0.02) {
+                        health -= 10;
+                        updateHUD();
+                        
+                        if (health <= 0) {
+                            gameOver();
+                        }
+                    }
+                }
+                
+                // 移动敌人朝向玩家
+                if (distance > CELL_SIZE * 1.5) {
+                    const angle = Math.atan2(dy, dx);
+                    enemy.x += Math.cos(angle) * enemy.speed;
+                    enemy.y += Math.sin(angle) * enemy.speed;
+                }
+            });
+            
+            // 移除死亡的敌人
+            enemies = enemies.filter(enemy => enemy.health > 0);
+        }
+        
+        // 射击
+        function shoot() {
+            const now = Date.now();
+            
+            // 检查是否在换弹
+            if (reloading) {
+                if (now - reloadStartTime >= weapon.reloadTime) {
+                    reloading = false;
+                    ammo = maxAmmo;
+                    updateHUD();
+                } else {
+                    return;
+                }
+            }
+            
+            // 检查弹药和射击冷却
+            if (ammo <= 0) {
+                reload();
+                return;
+            }
+            
+            if (now - lastShotTime < weapon.fireRate) {
+                return;
+            }
+            
+            // 消耗弹药
+            ammo--;
+            lastShotTime = now;
+            updateHUD();
+            
+            // 检查是否击中敌人
+            const halfFov = FOV / 2;
+            const rayAngle = player.angle;
+            
+            // 查找最近的敌人
+            let closestEnemy = null;
+            let closestDistance = Infinity;
+            
+            enemies.forEach(enemy => {
+                if (enemy.health <= 0) return;
+                
+                // 计算敌人相对于玩家的角度
+                const dx = enemy.x - player.x;
+                const dy = enemy.y - player.y;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const angle = Math.atan2(dy, dx);
+                
+                // 计算角度差
+                let angleDiff = angle - rayAngle;
+                angleDiff = normalizeAngle(angleDiff);
+                if (angleDiff > Math.PI) angleDiff -= Math.PI * 2;
+                
+                // 检查敌人是否在准星附近
+                if (Math.abs(angleDiff) < 0.1) { // 约5.7度
+                    if (distance < closestDistance) {
+                        closestDistance = distance;
+                        closestEnemy = enemy;
+                    }
+                }
+            });
+            
+            // 如果击中敌人
+            if (closestEnemy) {
+                closestEnemy.health -= weapon.damage;
+                
+                if (closestEnemy.health <= 0) {
+                    kills++;
+                    updateHUD();
+                }
+            }
+            
+            // 绘制枪口闪光
+            drawMuzzleFlash();
+        }
+        
+        // 绘制枪口闪光
+        function drawMuzzleFlash() {
+            const width = canvas.width;
+            const height = canvas.height;
+            const halfWidth = width / 2;
+            const halfHeight = height / 2;
+            
+            ctx.fillStyle = '#ffff00';
+            ctx.beginPath();
+            ctx.arc(halfWidth, halfHeight, 20, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // 闪光会很快消失，所以不需要额外清除
+        }
+        
+        // 换弹
+        function reload() {
+            if (reloading || ammo === maxAmmo) return;
+            
+            reloading = true;
+            reloadStartTime = Date.now();
+        }
+        
+        // 游戏结束
+        function gameOver() {
+            gameRunning = false;
+            finalKillsElement.textContent = kills;
+            gameOverScreen.style.display = 'flex';
+        }
+        
+        // 游戏循环
+        function gameLoop() {
+            if (!gameRunning || isPaused) return;
+            
+            // 更新玩家位置
+            if (player.moving.forward) {
+                const newX = player.x + Math.cos(player.angle) * PLAYER_SPEED;
+                const newY = player.y + Math.sin(player.angle) * PLAYER_SPEED;
+                
+                if (!isWall(newX, newY)) {
+                    player.x = newX;
+                    player.y = newY;
+                }
+            }
+            
+            if (player.moving.backward) {
+                const newX = player.x - Math.cos(player.angle) * PLAYER_SPEED;
+                const newY = player.y - Math.sin(player.angle) * PLAYER_SPEED;
+                
+                if (!isWall(newX, newY)) {
+                    player.x = newX;
+                    player.y = newY;
+                }
+            }
+            
+            if (player.moving.left) {
+                const newX = player.x - Math.cos(player.angle + Math.PI / 2) * PLAYER_SPEED;
+                const newY = player.y - Math.sin(player.angle + Math.PI / 2) * PLAYER_SPEED;
+                
+                if (!isWall(newX, newY)) {
+                    player.x = newX;
+                    player.y = newY;
+                }
+            }
+            
+            if (player.moving.right) {
+                const newX = player.x + Math.cos(player.angle + Math.PI / 2) * PLAYER_SPEED;
+                const newY = player.y + Math.sin(player.angle + Math.PI / 2) * PLAYER_SPEED;
+                
+                if (!isWall(newX, newY)) {
+                    player.x = newX;
+                    player.y = newY;
+                }
+            }
+            
+            // 更新敌人
+            updateEnemies();
+            
+            // 检查是否所有敌人都被消灭
+            if (enemies.length === 0) {
+                // 可以在这里添加关卡胜利逻辑
+            }
+            
+            // 渲染游戏
+            render3DView();
+            
+            // 继续游戏循环
+            requestAnimationFrame(gameLoop);
+        }
+        
+        // 检查位置是否有墙
+        function isWall(x, y) {
+            const mapX = Math.floor(x / CELL_SIZE);
+            const mapY = Math.floor(y / CELL_SIZE);
+            
+            if (mapX < 0 || mapX >= map[0].length || mapY < 0 || mapY >= map.length) {
+                return true;
+            }
+            
+            return map[mapY][mapX] === 1;
+        }
+        
+        // 事件监听
+        window.addEventListener('resize', resizeCanvas);
+        
+        // 键盘控制
+        document.addEventListener('keydown', (e) => {
+            if (!gameRunning || isPaused) return;
+            
+            switch (e.key) {
+                case 'w':
+                case 'W':
+                    player.moving.forward = true;
+                    break;
+                case 's':
+                case 'S':
+                    player.moving.backward = true;
+                    break;
+                case 'a':
+                case 'A':
+                    player.moving.left = true;
+                    break;
+                case 'd':
+                case 'D':
+                    player.moving.right = true;
+                    break;
+                case 'r':
+                case 'R':
+                    reload();
+                    break;
+                case 'Escape':
+                    isPaused = !isPaused;
+                    break;
+            }
+        });
+        
+        document.addEventListener('keyup', (e) => {
+            switch (e.key) {
+                case 'w':
+                case 'W':
+                    player.moving.forward = false;
+                    break;
+                case 's':
+                case 'S':
+                    player.moving.backward = false;
+                    break;
+                case 'a':
+                case 'A':
+                    player.moving.left = false;
+                    break;
+                case 'd':
+                case 'D':
+                    player.moving.right = false;
+                    break;
+            }
+        });
+        
+        // 鼠标控制
+        let mouseX = 0;
+        let lastMouseX = 0;
+        
+        document.addEventListener('mousemove', (e) => {
+            if (!gameRunning || isPaused) return;
+            
+            mouseX = e.clientX;
+            
+            // 计算鼠标移动量
+            const movementX = mouseX - lastMouseX;
+            lastMouseX = mouseX;
+            
+            // 旋转玩家视角
+            player.angle += movementX * 0.002;
+            player.angle = normalizeAngle(player.angle);
+            
+            // 重置鼠标位置到中心
+            if (mouseX < 100 || mouseX > canvas.width - 100) {
+                lastMouseX = canvas.width / 2;
+                mouseX = canvas.width / 2;
+                
+                // 在实际游戏中，这里应该使用Pointer Lock API
+                // 但为了简化示例，我们只是重置变量
+            }
+        });
+        
+        // 鼠标点击射击
+        document.addEventListener('mousedown', (e) => {
+            if (!gameRunning || isPaused) return;
+            
+            if (e.button === 0) { // 左键
+                shoot();
+            }
+        });
+        
+        // 开始游戏
+        startButton.addEventListener('click', () => {
+            startScreen.style.display = 'none';
+            gameRunning = true;
+            initGame();
+            gameLoop();
+        });
+        
+        // 重新开始游戏
+        restartButton.addEventListener('click', () => {
+            gameOverScreen.style.display = 'none';
+            gameRunning = true;
+            initGame();
+            gameLoop();
+        });
+        
+        // 初始调整画布大小
+        resizeCanvas();
+    </script>
+</body>
+</html>
