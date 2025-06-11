@@ -1,0 +1,695 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>雷霆战机 - 简化版</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #1a2980, #26d0ce);
+            overflow: hidden;
+            color: white;
+        }
+        
+        .game-container {
+            position: relative;
+            width: 800px;
+            max-width: 95%;
+            height: 600px;
+            background: rgba(0, 0, 30, 0.7);
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+        }
+        
+        #game-canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: 1;
+        }
+        
+        .game-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            z-index: 2;
+            text-align: center;
+            background: rgba(0, 0, 0, 0.7);
+            transition: opacity 0.5s;
+        }
+        
+        .game-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+        
+        h1 {
+            font-size: 48px;
+            margin-bottom: 20px;
+            color: #ffcc00;
+            text-shadow: 0 0 10px rgba(255, 204, 0, 0.8);
+        }
+        
+        .screen-text {
+            font-size: 22px;
+            margin: 15px 0;
+            max-width: 80%;
+            line-height: 1.6;
+        }
+        
+        .stats {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            display: flex;
+            gap: 20px;
+            z-index: 3;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 10px 15px;
+            border-radius: 10px;
+        }
+        
+        .stat-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+        
+        .stat-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #ffcc00;
+        }
+        
+        .btn {
+            margin-top: 30px;
+            padding: 15px 40px;
+            font-size: 20px;
+            font-weight: bold;
+            background: linear-gradient(to right, #ff9500, #ff3300);
+            border: none;
+            border-radius: 50px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 5px 15px rgba(255, 149, 0, 0.4);
+        }
+        
+        .btn:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 25px rgba(255, 149, 0, 0.6);
+        }
+        
+        .controls {
+            display: flex;
+            justify-content: space-around;
+            margin-top: 20px;
+            width: 80%;
+        }
+        
+        .control-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            margin: 0 15px;
+        }
+        
+        .key {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(to bottom, #555, #333);
+            border-radius: 8px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            font-size: 24px;
+            margin-bottom: 10px;
+            box-shadow: 0 5px 0 rgba(0, 0, 0, 0.3);
+        }
+        
+        .key-label {
+            font-size: 14px;
+            color: #aaa;
+        }
+        
+        /* 星空背景 */
+        .stars {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+        
+        .star {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            background: white;
+            border-radius: 50%;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div class="game-container">
+        <div class="stars" id="stars"></div>
+        <canvas id="game-canvas"></canvas>
+        
+        <div class="stats">
+            <div class="stat-item">
+                <div>分数</div>
+                <div id="score" class="stat-value">0</div>
+            </div>
+            <div class="stat-item">
+                <div>生命</div>
+                <div id="lives" class="stat-value">3</div>
+            </div>
+            <div class="stat-item">
+                <div>等级</div>
+                <div id="level" class="stat-value">1</div>
+            </div>
+        </div>
+        
+        <div id="start-screen" class="game-overlay">
+            <h1>雷霆战机</h1>
+            <p class="screen-text">保卫我们的星球免受外星入侵！击落敌机获得分数，躲避撞击保存生命。</p>
+            
+            <div class="controls">
+                <div class="control-item">
+                    <div class="key">←</div>
+                    <div class="key-label">向左</div>
+                </div>
+                <div class="control-item">
+                    <div class="key">→</div>
+                    <div class="key-label">向右</div>
+                </div>
+                <div class="control-item">
+                    <div class="key">↑</div>
+                    <div class="key-label">向上</div>
+                </div>
+                <div class="control-item">
+                    <div class="key">↓</div>
+                    <div class="key-label">向下</div>
+                </div>
+                <div class="control-item">
+                    <div class="key">␣</div>
+                    <div class="key-label">射击</div>
+                </div>
+            </div>
+            
+            <button id="start-btn" class="btn">开始游戏</button>
+            <p class="screen-text">提示：你也可以使用鼠标移动战机并点击射击</p>
+        </div>
+        
+        <div id="game-over-screen" class="game-overlay hidden">
+            <h1>任务失败</h1>
+            <p class="screen-text">你的战机已被摧毁！</p>
+            <p id="final-score" class="screen-text">最终得分: 0</p>
+            <button id="restart-btn" class="btn">重新开始</button>
+        </div>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const canvas = document.getElementById('game-canvas');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('start-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        const startScreen = document.getElementById('start-screen');
+        const gameOverScreen = document.getElementById('game-over-screen');
+        const scoreDisplay = document.getElementById('score');
+        const livesDisplay = document.getElementById('lives');
+        const levelDisplay = document.getElementById('level');
+        const finalScore = document.getElementById('final-score');
+        const starsContainer = document.getElementById('stars');
+
+        // 设置Canvas尺寸
+        canvas.width = canvas.parentElement.clientWidth;
+        canvas.height = canvas.parentElement.clientHeight;
+
+        // 游戏变量
+        const game = {
+            state: 'start', // start, playing, gameOver
+            score: 0,
+            lives: 3,
+            level: 1,
+            gameObjects: {
+                player: null,
+                bullets: [],
+                enemies: [],
+                explosions: [],
+                particles: []
+            }
+        };
+
+        // 玩家战机类
+        class Player {
+            constructor() {
+                this.width = 60;
+                this.height = 40;
+                this.x = canvas.width / 2 - this.width / 2;
+                this.y = canvas.height - this.height - 30;
+                this.speed = 5;
+                this.isMouseControl = false;
+                this.shootCooldown = 0;
+                this.shootDelay = 15; // 射击冷却时间（帧）
+            }
+
+            update() {
+                // 更新射击冷却
+                if (this.shootCooldown > 0) {
+                    this.shootCooldown--;
+                }
+                
+                // 边界检测
+                if (this.x < 0) this.x = 0;
+                if (this.x + this.width > canvas.width) this.x = canvas.width - this.width;
+                if (this.y < 0) this.y = 0;
+                if (this.y + this.height > canvas.height) this.y = canvas.height - this.height;
+            }
+
+            shoot() {
+                if (this.shootCooldown === 0) {
+                    game.gameObjects.bullets.push(new Bullet(this.x + this.width / 2, this.y));
+                    this.shootCooldown = this.shootDelay;
+                }
+            }
+
+            draw() {
+                ctx.fillStyle = '#3498db';
+                ctx.beginPath();
+                // 画飞机主体
+                ctx.moveTo(this.x + this.width / 2, this.y);
+                ctx.lineTo(this.x, this.y + this.height);
+                ctx.lineTo(this.x + this.width, this.y + this.height);
+                ctx.closePath();
+                ctx.fill();
+
+                // 画机翼
+                ctx.fillStyle = '#2c3e50';
+                ctx.beginPath();
+                ctx.moveTo(this.x + 20, this.y + 20);
+                ctx.lineTo(this.x + this.width - 20, this.y + 20);
+                ctx.lineTo(this.x + this.width / 2, this.y + this.height - 10);
+                ctx.closePath();
+                ctx.fill();
+
+                // 画驾驶舱
+                ctx.fillStyle = '#e74c3c';
+                ctx.beginPath();
+                ctx.arc(this.x + this.width / 2, this.y + 15, 8, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 画引擎粒子效果
+                const particleSize = Math.random() * 6 + 4;
+                ctx.fillStyle = '#ff9900';
+                ctx.beginPath();
+                ctx.arc(
+                    this.x + this.width / 2, 
+                    this.y + this.height + 2 + Math.random() * 5, 
+                    particleSize, 
+                    0, 
+                    Math.PI * 2
+                );
+                ctx.fill();
+            }
+        }
+
+        // 子弹类
+        class Bullet {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 4;
+                this.speed = 10;
+                this.color = '#ffcc00';
+            }
+
+            update() {
+                this.y -= this.speed;
+                return this.y > 0;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 子弹光效
+                ctx.fillStyle = '#ffffff';
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius / 2, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+
+        // 敌机类
+        class Enemy {
+            constructor() {
+                this.width = 40 + Math.random() * 20;
+                this.height = 30 + Math.random() * 15;
+                this.x = Math.random() * (canvas.width - this.width);
+                this.y = -this.height;
+                this.speed = 1 + Math.random() * game.level / 2;
+                this.color = `hsl(${Math.floor(Math.random() * 30) + 330}, 80%, 60%)`;
+                this.value = Math.floor(this.width / 10) * 10;
+            }
+
+            update() {
+                this.y += this.speed;
+                return this.y < canvas.height;
+            }
+
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                // 画敌人飞碟
+                ctx.moveTo(this.x + this.width / 2, this.y);
+                ctx.lineTo(this.x + this.width - 10, this.y + this.height / 2);
+                ctx.lineTo(this.x + this.width / 2, this.y + this.height);
+                ctx.lineTo(this.x + 10, this.y + this.height / 2);
+                ctx.closePath();
+                ctx.fill();
+                
+                // 画敌人飞碟细节
+                ctx.fillStyle = '#e74c3c';
+                ctx.beginPath();
+                ctx.arc(this.x + this.width / 2, this.y + 15, 5, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 画敌机推进器
+                ctx.fillStyle = '#ff6600';
+                for (let i = 0; i < 3; i++) {
+                    const offset = (i - 1) * 15;
+                    ctx.beginPath();
+                    ctx.arc(
+                        this.x + this.width / 2 + offset, 
+                        this.y + this.height - 5, 
+                        4, 
+                        0, 
+                        Math.PI
+                    );
+                    ctx.fill();
+                }
+            }
+        }
+
+        // 爆炸效果类
+        class Explosion {
+            constructor(x, y) {
+                this.x = x;
+                this.y = y;
+                this.radius = 5;
+                this.maxRadius = 20;
+                this.alpha = 1.0;
+            }
+
+            update() {
+                this.radius += 0.8;
+                this.alpha -= 0.03;
+                return this.alpha > 0;
+            }
+
+            draw() {
+                ctx.fillStyle = `rgba(255, ${150 - this.radius * 4}, 0, ${this.alpha})`;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                
+                // 爆炸粒子
+                ctx.fillStyle = `rgba(255, 255, 100, ${this.alpha})`;
+                ctx.beginPath();
+                const particleCount = Math.floor(this.radius / 2);
+                for (let i = 0; i < particleCount; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const dist = Math.random() * this.radius;
+                    ctx.fillRect(
+                        this.x + Math.cos(angle) * dist - 1.5,
+                        this.y + Math.sin(angle) * dist - 1.5,
+                        3, 3
+                    );
+                }
+            }
+        }
+
+        // 创建星空背景
+        function createStars() {
+            // 清空现有星星
+            starsContainer.innerHTML = '';
+            
+            // 创建新星星
+            const starCount = Math.floor(canvas.width * canvas.height / 1000);
+            
+            for (let i = 0; i < starCount; i++) {
+                const star = document.createElement('div');
+                star.className = 'star';
+                star.style.left = `${Math.random() * 100}%`;
+                star.style.top = `${Math.random() * 100}%`;
+                star.style.opacity = Math.random() * 0.5 + 0.3;
+                starsContainer.appendChild(star);
+            }
+        }
+
+        // 开始游戏
+        function startGame() {
+            // 重置游戏状态
+            game.state = 'playing';
+            game.score = 0;
+            game.lives = 3;
+            game.level = 1;
+            
+            // 重置显示
+            scoreDisplay.textContent = game.score;
+            livesDisplay.textContent = game.lives;
+            levelDisplay.textContent = game.level;
+            
+            // 重置游戏对象
+            game.gameObjects = {
+                player: new Player(),
+                bullets: [],
+                enemies: [],
+                explosions: [],
+                particles: []
+            };
+            
+            // 隐藏开始和结束界面
+            startScreen.classList.add('hidden');
+            gameOverScreen.classList.add('hidden');
+            
+            // 开始游戏循环
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 游戏循环
+        function gameLoop() {
+            // 清空画布
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // 检查游戏状态
+            if (game.state !== 'playing') return;
+            
+            // 更新玩家
+            game.gameObjects.player.update();
+            
+            // 更新子弹
+            game.gameObjects.bullets = game.gameObjects.bullets.filter(bullet => {
+                bullet.update();
+                return bullet.update();
+            });
+            
+            // 更新敌人
+            game.gameObjects.enemies = game.gameObjects.enemies.filter(enemy => {
+                enemy.update();
+                return enemy.update();
+            });
+            
+            // 更新爆炸
+            game.gameObjects.explosions = game.gameObjects.explosions.filter(explosion => {
+                return explosion.update();
+            });
+            
+            // 随机生成敌人
+            if (Math.random() < 0.03 * game.level) {
+                game.gameObjects.enemies.push(new Enemy());
+            }
+            
+            // 检查碰撞
+            checkCollisions();
+            
+            // 检测玩家是否存活
+            if (game.lives <= 0) {
+                endGame();
+                return;
+            }
+            
+            // 绘制所有对象
+            drawGame();
+            
+            // 继续游戏循环
+            requestAnimationFrame(gameLoop);
+        }
+
+        // 绘制游戏对象
+        function drawGame() {
+            // 绘制游戏背景（星空）
+            ctx.fillStyle = 'rgba(0, 10, 30, 0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            
+            // 绘制粒子/星星背景细节
+            ctx.fillStyle = '#ffffff';
+            for (let i = 0; i < 50; i++) {
+                ctx.fillRect(
+                    Math.random() * canvas.width,
+                    Math.random() * canvas.height,
+                    1, 1
+                );
+            }
+            
+            // 绘制所有敌人
+            game.gameObjects.enemies.forEach(enemy => enemy.draw());
+            
+            // 绘制所有子弹
+            game.gameObjects.bullets.forEach(bullet => bullet.draw());
+            
+            // 绘制所有爆炸
+            game.gameObjects.explosions.forEach(explosion => explosion.draw());
+            
+            // 绘制玩家
+            game.gameObjects.player.draw();
+        }
+
+        // 检查碰撞
+        function checkCollisions() {
+            // 子弹和敌机碰撞
+            game.gameObjects.bullets.forEach((bullet, bulletIndex) => {
+                game.gameObjects.enemies.forEach((enemy, enemyIndex) => {
+                    if (
+                        bullet.x > enemy.x &&
+                        bullet.x < enemy.x + enemy.width &&
+                        bullet.y > enemy.y &&
+                        bullet.y < enemy.y + enemy.height
+                    ) {
+                        // 增加分数
+                        game.score += enemy.value;
+                        scoreDisplay.textContent = game.score;
+                        
+                        // 创建爆炸
+                        game.gameObjects.explosions.push(new Explosion(
+                            bullet.x, 
+                            enemy.y + enemy.height / 2
+                        ));
+                        
+                        // 移除子弹和敌机
+                        game.gameObjects.bullets.splice(bulletIndex, 1);
+                        game.gameObjects.enemies.splice(enemyIndex, 1);
+                        
+                        // 检查升级
+                        if (game.score >= game.level * 100) {
+                            game.level++;
+                            levelDisplay.textContent = game.level;
+                        }
+                    }
+                });
+            });
+            
+            // 玩家和敌机碰撞
+            const player = game.gameObjects.player;
+            game.gameObjects.enemies.forEach((enemy, enemyIndex) => {
+                if (
+                    player.x < enemy.x + enemy.width &&
+                    player.x + player.width > enemy.x &&
+                    player.y < enemy.y + enemy.height &&
+                    player.y + player.height > enemy.y
+                ) {
+                    // 减少生命
+                    game.lives--;
+                    livesDisplay.textContent = game.lives;
+                    
+                    // 创建爆炸
+                    game.gameObjects.explosions.push(new Explosion(
+                        enemy.x + enemy.width / 2,
+                        enemy.y + enemy.height / 2
+                    ));
+                    
+                    // 移除敌机
+                    game.gameObjects.enemies.splice(enemyIndex, 1);
+                }
+            });
+        }
+
+        // 游戏结束
+        function endGame() {
+            game.state = 'gameOver';
+            finalScore.textContent = `最终得分: ${game.score}`;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+        // 事件监听
+        window.addEventListener('resize', () => {
+            canvas.width = canvas.parentElement.clientWidth;
+            canvas.height = canvas.parentElement.clientHeight;
+            createStars();
+        });
+
+        startBtn.addEventListener('click', startGame);
+        restartBtn.addEventListener('click', startGame);
+
+        // 键盘控制
+        document.addEventListener('keydown', (e) => {
+            if (game.state !== 'playing') return;
+            
+            const player = game.gameObjects.player;
+            
+            if (e.key === 'ArrowLeft' || e.key === 'a') player.x -= player.speed;
+            if (e.key === 'ArrowRight' || e.key === 'd') player.x += player.speed;
+            if (e.key === 'ArrowUp' || e.key === 'w') player.y -= player.speed;
+            if (e.key === 'ArrowDown' || e.key === 's') player.y += player.speed;
+            if (e.key === ' ') player.shoot();
+        });
+
+        // 鼠标控制
+        canvas.addEventListener('mousemove', (e) => {
+            if (game.state !== 'playing') return;
+            
+            const rect = canvas.getBoundingClientRect();
+            const player = game.gameObjects.player;
+            
+            player.isMouseControl = true;
+            player.x = e.clientX - rect.left - player.width / 2;
+            player.y = e.clientY - rect.top - player.height / 2;
+        });
+
+        canvas.addEventListener('click', () => {
+            if (game.state !== 'playing') return;
+            game.gameObjects.player.shoot();
+        });
+
+        // 创建星星并初始化
+        createStars();
+    </script>
+</body>
+</html>
